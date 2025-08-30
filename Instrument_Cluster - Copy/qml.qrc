@@ -1,0 +1,35 @@
+<RCC>
+    <qresource prefix="/">
+        <file>main.qml</file>
+        <file>FuncIcon.qml</file>
+        <file>Speedometer.qml</file>
+        <file>StartWindows.qml</file>
+        <file>TempIcon.qml</file>
+        <file>img/bottom.png</file>
+        <file>img/Panel.png</file>
+        <file>img/start_btn.png</file>
+        <file>icons/icons-left/hazard_light.svg</file>
+        <file>icons/icons-left/light_cos.svg</file>
+        <file>icons/icons-left/light_high.svg</file>
+        <file>icons/icons-left/temp_cabin.svg</file>
+        <file>icons/icons-left/xi_nhan_trai.svg</file>
+        <file>icons/icons-right/temp_oil.svg</file>
+        <file>icons/icons-right/xi_nhan_phai.svg</file>
+        <file>icons/nissan-6.svg</file>
+        <file>img/top.png</file>
+        <file>img/Indicator.png</file>
+        <file>img/speedImg.png</file>
+        <file>img/tachoImg.png</file>
+        <file>icons/icons-left-checked/hazard_light_checked.png</file>
+        <file>icons/icons-left-checked/light_cos_checked.svg</file>
+        <file>icons/icons-left-checked/light-high-checked.svg</file>
+        <file>icons/icons-left-checked/temp_cabin_danger.svg</file>
+        <file>icons/icons-left-checked/temp_cabin_warning.svg</file>
+        <file>icons/icons-left-checked/xi_nhan_trai_checked.svg</file>
+        <file>icons/icons-right-checked/temp_cabin_danger.svg</file>
+        <file>icons/icons-right-checked/temp_cabin_warning.svg</file>
+        <file>icons/icons-right-checked/temp_oil_danger.svg</file>
+        <file>icons/icons-right-checked/temp_oil_warning.svg</file>
+        <file>icons/icons-right-checked/xi_nhan_phai_checked.svg</file>
+    </qresource>
+</RCC>
