@@ -260,16 +260,16 @@ Window {
                     text: Qt.formatDateTime(new Date(), "hh:mm:ss AP")
                 }
 
-                Timer {
-                    id: realTimeUpdateID
-                    interval: 1000
-                    running: true
-                    repeat: true
-                    onTriggered: {
-                        realTimeID.text = Qt.formatDateTime(new Date(),
-                                                            "hh:mm:ss AP")
-                    }
-                }
+                // Timer {
+                //     id: realTimeUpdateID
+                //     interval: 1000
+                //     running: true
+                //     repeat: true
+                //     onTriggered: {
+                //         realTimeID.text = Qt.formatDateTime(new Date(),
+                //                                             "hh:mm:ss AP")
+                //     }
+                // }
 
                 //----cos----
                 FuncIcon {
@@ -556,6 +556,23 @@ Window {
                 var mappedRpmAngle = minRpmAngle + nonLinearProgress * (maxRpmAngle - minRpmAngle)
                 speedometerRight.angle = mappedRpmAngle
                 break
+            case "Temperature":
+                const cabinTemp = parseFloat(status)
+                if (!isNaN(cabinTemp)) {
+                    cabinTempID.temperature = cabinTemp
+                    console.log("Cập nhật nhiệt độ cabin:", cabinTemp)
+                    if (cabinTemp >= 35) {
+                        cabinTempID.status = "DANGEROUS"
+                    } else if (cabinTemp >= 31) {
+                        cabinTempID.status = "WARNING"
+                    } else {
+                        cabinTempID.status = "NORMAL"
+                    }
+                }
+                break
+            case "DATE/TIME":
+                realTimeID.text = status
+                break
             default:
                 console.log("Invalid Device:", device)
                 break
@@ -563,23 +580,6 @@ Window {
         }
     }
 
-    // NetworkManager {
-    //     id: networkManager
-    //     onDataReceived: data => {
-    //                         var lines = data.split('\n')
-    //                         for (var i = 0; i < lines.length; i++) {
-    //                             var line = lines[i].trim()
-    //                             if (line.startsWith("SPEED_LIMIT:")) {
-    //                                 var value = line.split(':')[1]
-    //                                 if (value === "NO_SIGN") {
-    //                                     speedLimitDisplay.text = "---"
-    //                                 } else {
-    //                                     speedLimitDisplay.text = value
-    //                                 }
-    //                             }
-    //                         }
-    //                     }
-    // }
     NetworkManager {
         id: networkManager
         onDataReceived: data => {

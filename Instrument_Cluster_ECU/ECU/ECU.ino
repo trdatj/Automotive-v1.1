@@ -1,316 +1,539 @@
-bool last_btn_den = HIGH;
-bool last_btn_pha = HIGH;
-bool last_btn_haza = HIGH;
-bool last_btn_trai = HIGH;
-bool last_btn_phai = HIGH;
-bool last_btn_start = HIGH;
+#include <DHT.h>
+#include <Wire.h>
+#include "RTClib.h"
 
-int led_send = 13;     // LED báo hiệu đang gửi dữ liệu (TX)
-int led_receive = 14;  // LED báo hiệu đã nhận lệnh (RX)
-int led_den = 25;
-int led_pha = 32;
-int led_xiNhanTrai = 26;
-int led_xiNhanPhai = 33;
+// ================== KHAI BÁO CHÂN ==================
+#define RELAY 17
+#define BTN_START 33
+#define BTN_DEN 35
+#define BTN_PHA 34
+#define BTN_HAZARD 32
+#define BTN_XINHANTRAI 19
+#define BTN_XINHANPHAI 5
 
-const int button_den = 2;
-const int button_pha = 4;
-const int button_haza = 16;
-const int button_xinnhantrai = 17;
-const int button_xinnhanphai = 5;
-const int button_start = 18;
-const int POT_PIN = 35;
+#define LED_DEN 26
+#define LED_PHA 14
+#define LED_XINHANTRAI 25
+#define LED_XINHANPHAI 27
 
-int gtcambien;
-int last_gtcambien = -1;
+#define BIENTRO 4
+#define DHT11_PIN 23
+#define DHTTYPE DHT11
 
-bool wasLeftBlinkingBeforeHazard = false;
-bool wasRightBlinkingBeforeHazard = false;
+// ================== KHAI BÁO BIẾN ==================
+DHT dht(DHT11_PIN, DHTTYPE);
+RTC_DS1307 rtc;
 
-bool state_den = false;
-bool state_pha = false;
-bool state_haza = false;
-bool state_xinhantrai = false;
-bool state_xinhanphai = false;
-bool state_engine_running = false;
+// Trạng thái hệ thống
+bool carStarted = false;
+bool denThuong = false;
+bool denPha = false;
+bool xinhanTrai = false;
+bool xinhanPhai = false;
+bool hazardMode = false;
+bool prevXinhanTrai = false;  // Lưu trạng thái xin han trước khi bật hazard
+bool prevXinhanPhai = false;
 
-bool hazaBlinkState = false;
-bool traiBlinkState = false;
-bool phaiBlinkState = false;
+// Biến đo lường
+float temperature = 0;
+float humidity = 0;
+float speed = 0;
+DateTime currentTime;
 
-TaskHandle_t TaskReadButtons;
-TaskHandle_t TaskReadCMD;
-TaskHandle_t TaskReadAnalog;
-TaskHandle_t TaskControlLights;
+// Task handles
+TaskHandle_t taskStartHandle;
+TaskHandle_t taskDHT11Handle;
+TaskHandle_t taskSpeedHandle;
+TaskHandle_t taskDS1307Handle;
+TaskHandle_t taskDenThuongHandle;
+TaskHandle_t taskDenPhaHandle;
+TaskHandle_t taskXinhanHandle;
+TaskHandle_t taskHazardHandle;
+TaskHandle_t taskCMDHandle;
 
-//Task để đọc các lệnh từ Serial
-void readCMDTask(void *pvParameters) {
-  while (1) {
-    if (Serial.available()) {
-      String cmd = Serial.readStringUntil('\n');
-      cmd.trim();  // Loại bỏ khoảng trắng ở đầu và cuối chuỗi
 
-      if (cmd == "TURN_LEFT:ON") {
-        state_xinhantrai = true;
-        state_xinhanphai = false;
-        // state_haza = false;
-      } else if (cmd == "TURN_LEFT:OFF") {
-        state_xinhantrai = false;
-      } else if (cmd == "TURN_RIGHT:ON") {
-        state_xinhanphai = true;
-        state_xinhantrai = false;
-        // state_haza = false;
-      } else if (cmd == "TURN_RIGHT:OFF") {
-        state_xinhanphai = false;
-      } else if (cmd == "HAZARD:ON") {
-        wasLeftBlinkingBeforeHazard = state_xinhantrai;
-        wasRightBlinkingBeforeHazard = state_xinhanphai;
+// Semaphores
+SemaphoreHandle_t xMutex;
 
-        state_haza = true;
-        state_xinhantrai = false;
-        state_xinhanphai = false;
-      } else if (cmd == "HAZARD:OFF") {
-        state_haza = false;
-        
-        if (wasLeftBlinkingBeforeHazard) {
-          state_xinhantrai = true;
-          Serial.println("TURN_LEFT:ON");
-        }
-        if (wasRightBlinkingBeforeHazard) {
-          state_xinhanphai = true;
-          Serial.println("TURN_RIGHT:ON");
-        }
-        wasLeftBlinkingBeforeHazard = false;
-        wasRightBlinkingBeforeHazard = false;
-      } else if (cmd == "DEN_COS:ON") {
-        state_den = true;
-      } else if (cmd == "DEN_COS:OFF") {
-        state_den = false;
-        state_pha = false;  // Tắt đèn pha nếu đèn cos tắt
-      } else if (cmd == "DEN_PHA:ON") {
-        // Chỉ bật pha nếu cos đang bật
-        if (state_den) state_pha = true;
-      } else if (cmd == "DEN_PHA:OFF") {
-        state_pha = false;
-      } else if (cmd == "ENGINE:START") {
-        state_engine_running = true;
-        Serial.println("ENGINE_STATUS:RUNNING");  // Báo trạng thái động cơ
-      } else if (cmd == "ENGINE:STOP") {
-        state_engine_running = false;
-        Serial.println("ENGINE_STATUS:STOPPED");  // Báo trạng thái động cơ
-      }
-
-      Serial.println(cmd);
-      digitalWrite(led_receive, HIGH);  // Báo hiệu đã nhận lệnh
-      vTaskDelay(pdMS_TO_TICKS(50));
-      digitalWrite(led_receive, LOW);
-    }
-    vTaskDelay(pdMS_TO_TICKS(50));  // Tránh task chạy quá nhanh
-  }
-}
-
-// Task để đọc trạng thái các nút nhấn vật lý và gửi qua Serial
-void readButtonTask(void *pvParameters) {
-  while (1) {
-    bool current_den = digitalRead(button_den);
-    bool current_pha = digitalRead(button_pha);
-    bool current_haza = digitalRead(button_haza);
-    bool current_trai = digitalRead(button_xinnhantrai);
-    bool current_phai = digitalRead(button_xinnhanphai);
-    bool current_button_start = digitalRead(button_start);
-
-    // Xử lý nút Đèn Cos
-    if (last_btn_den == HIGH && current_den == LOW) {
-      state_den = !state_den;
-      Serial.print("DEN_COS:");
-      Serial.println(state_den ? "ON" : "OFF");
-      if (!state_den) state_pha = false;  // Tắt pha nếu cos tắt
-    }
-    // Xử lý nút Đèn Pha
-    if (last_btn_pha == HIGH && current_pha == LOW) {
-      if (state_den) {  // Chỉ bật pha nếu cos đang bật
-        state_pha = !state_pha;
-        Serial.print("DEN_PHA:");
-        Serial.println(state_pha ? "ON" : "OFF");
-      } else {
-        Serial.println("CANNOT_PHA:COS_OFF");
-      }
-    }
-    // Xử lý nút Hazard
-    if (last_btn_haza == HIGH && current_haza == LOW) {
-      state_haza = !state_haza;
-      Serial.print("HAZARD:");
-      Serial.println(state_haza ? "ON" : "OFF");
-      if (state_haza) {
-        wasLeftBlinkingBeforeHazard = state_xinhantrai;
-        wasRightBlinkingBeforeHazard = state_xinhanphai;
-        state_xinhantrai = false;
-        state_xinhanphai = false;
-      } else {
-        if (wasLeftBlinkingBeforeHazard) {
-          state_xinhantrai = true;
-        }
-        if (wasRightBlinkingBeforeHazard) {
-          state_xinhanphai = true;
-        }
-        wasLeftBlinkingBeforeHazard = false;
-        wasRightBlinkingBeforeHazard = false;
-      }
-    }
-    // Xử lý nút Xi nhan trái
-    if (last_btn_trai == HIGH && current_trai == LOW) {
-      if (!state_haza) {  // Chỉ xử lý nếu hazard không bật
-        state_xinhantrai = !state_xinhantrai;
-        Serial.print("TURN_LEFT:");
-        Serial.println(state_xinhantrai ? "ON" : "OFF");
-        if (state_xinhantrai) {
-          state_xinhanphai = false;  // Tắt xi nhan phải nếu bật trái
-          Serial.println("TURN_RIGHT:OFF");
-        }
-      } else {
-        Serial.println("CANNOT_TURN_LEFT:HAZARD_ON");
-      }
-    }
-    // Xử lý nút Xi nhan phải
-    if (last_btn_phai == HIGH && current_phai == LOW) {
-      if (!state_haza) {  // Chỉ xử lý nếu hazard không bật
-        state_xinhanphai = !state_xinhanphai;
-        Serial.print("TURN_RIGHT:");
-        Serial.println(state_xinhanphai ? "ON" : "OFF");
-        if (state_xinhanphai) {
-          state_xinhantrai = false;  // Tắt xi nhan trái nếu bật phải
-          Serial.println("TURN_LEFT:OFF");
-        }
-      } else {
-        Serial.println("CANNOT_TURN_RIGHT:HAZARD_ON");
-      }
-    }
-    // Xử lý nút Start/Stop Engine
-    if (last_btn_start == HIGH && current_button_start == LOW) {
-      state_engine_running = !state_engine_running;
-      Serial.print("ENGINE_STATUS:");
-      Serial.println(state_engine_running ? "RUNNING" : "STOPPED");
-    }
-
-    // Cập nhật trạng thái cuối cùng của các nút
-    last_btn_den = current_den;    // Đã giữ lại tên biến gốc
-    last_btn_pha = current_pha;    // Đã giữ lại tên biến gốc
-    last_btn_haza = current_haza;  // Đã giữ lại tên biến gốc
-    last_btn_trai = current_trai;  // Đã giữ lại tên biến gốc
-    last_btn_phai = current_phai;  // Đã giữ lại tên biến gốc
-    last_btn_start = current_button_start;
-
-    vTaskDelay(pdMS_TO_TICKS(50));  // Tạm dừng 50ms để chống nhiễu
-  }
-}
-
-// Task để đọc giá trị analog từ biến trở (cho tốc độ)
-void readPotentiometerTask(void *pvParameters) {
-  const int NUM_READINGS = 10;  // Số lượng lần đọc để lấy trung bình
-  int readings[NUM_READINGS];   // Mảng để lưu trữ các lần đọc
-  int readIndex = 0;            // Vị trí hiện tại trong mảng
-  long total = 0;               // Tổng các giá trị đọc
-  int averageReading = 0;       // Giá trị trung bình
-
-  for (int i = 0; i < NUM_READINGS; i++) {
-    readings[i] = 0;
-  }
-
-  while (1) {
-    total = total - readings[readIndex];
-    readings[readIndex] = analogRead(POT_PIN);
-    total = total + readings[readIndex];
-    readIndex = (readIndex + 1) % NUM_READINGS;
-
-    averageReading = total / NUM_READINGS;
-    gtcambien = averageReading;
-
-    if (gtcambien != last_gtcambien) {
-      Serial.print("POT_VAL:");
-      Serial.println(gtcambien);
-      digitalWrite(led_send, HIGH);
-      vTaskDelay(pdMS_TO_TICKS(50));
-      digitalWrite(led_send, LOW);
-
-      last_gtcambien = gtcambien;
-    }
-
-    vTaskDelay(pdMS_TO_TICKS(100));  // Đọc mỗi 100ms
-  }
-}
-
-// Task điều khiển đèn vật lý (cos/pha/xi nhan/hazard) dựa trên trạng thái
-void controlLightsTask(void *pvParameters) {
-  while (1) {
-    // Điều khiển đèn cos và pha
-    digitalWrite(led_den, state_den ? HIGH : LOW);
-    digitalWrite(led_pha, state_pha ? HIGH : LOW);
-
-    // Điều khiển xi nhan và hazard
-    if (state_haza) {  // Nếu hazard đang bật
-      hazaBlinkState = !hazaBlinkState;
-      digitalWrite(led_xiNhanTrai, hazaBlinkState ? HIGH : LOW);
-      digitalWrite(led_xiNhanPhai, hazaBlinkState ? HIGH : LOW);
-    } else {  // Nếu hazard tắt, xử lý xi nhan riêng lẻ
-      // Kiểm tra xem xi nhan trái có đang bật không và nhấp nháy
-      if (state_xinhantrai) {
-        traiBlinkState = !traiBlinkState;  // Đảo trạng thái nhấp nháy
-        digitalWrite(led_xiNhanTrai, traiBlinkState ? HIGH : LOW);
-      } else {
-        digitalWrite(led_xiNhanTrai, LOW);  // Đảm bảo tắt LED nếu xi nhan tắt
-        traiBlinkState = false;             // Reset trạng thái nhấp nháy
-      }
-
-      // Kiểm tra xem xi nhan phải có đang bật không và nhấp nháy
-      if (state_xinhanphai) {
-        phaiBlinkState = !phaiBlinkState;  // Đảo trạng thái nhấp nháy
-        digitalWrite(led_xiNhanPhai, phaiBlinkState ? HIGH : LOW);
-      } else {
-        digitalWrite(led_xiNhanPhai, LOW);  // Đảm bảo tắt LED nếu xi nhan tắt
-        phaiBlinkState = false;             // Reset trạng thái nhấp nháy
-      }
-    }
-    vTaskDelay(pdMS_TO_TICKS(500));  // Tốc độ nhấp nháy cho đèn (300ms on/off)
-  }
-}
-
+// ================== SETUP ==================
 void setup() {
   Serial.begin(115200);
 
-  // Cấu hình các chân GPIO (output)
-  pinMode(led_send, OUTPUT);
-  pinMode(led_receive, OUTPUT);
-  pinMode(led_den, OUTPUT);
-  pinMode(led_pha, OUTPUT);
-  pinMode(led_xiNhanTrai, OUTPUT);
-  pinMode(led_xiNhanPhai, OUTPUT);
+  // Khởi tạo pins
+  pinMode(RELAY, OUTPUT);
+  pinMode(BTN_START, INPUT_PULLUP);
+  pinMode(BTN_DEN, INPUT_PULLUP);
+  pinMode(BTN_PHA, INPUT_PULLUP);
+  pinMode(BTN_HAZARD, INPUT_PULLUP);
+  pinMode(BTN_XINHANTRAI, INPUT_PULLUP);
+  pinMode(BTN_XINHANPHAI, INPUT_PULLUP);
 
-  // Cấu hình các chân GPIO (input_pullup)
-  pinMode(button_den, INPUT_PULLUP);
-  pinMode(button_pha, INPUT_PULLUP);
-  pinMode(button_haza, INPUT_PULLUP);
-  pinMode(button_xinnhantrai, INPUT_PULLUP);
-  pinMode(button_xinnhanphai, INPUT_PULLUP);
-  pinMode(button_start, INPUT_PULLUP);
+  pinMode(LED_DEN, OUTPUT);
+  pinMode(LED_PHA, OUTPUT);
+  pinMode(LED_XINHANTRAI, OUTPUT);
+  pinMode(LED_XINHANPHAI, OUTPUT);
 
-  // Không cần pinMode cho chân ADC, analogRead sẽ tự cấu hình
+  pinMode(BIENTRO, INPUT);
 
-  // Tạo các FreeRTOS tasks
-  xTaskCreate(readCMDTask, "ReadCMD", 4096, NULL, 2, &TaskReadCMD);  // Ưu tiên cao hơn cho việc nhận lệnh
-  xTaskCreate(readButtonTask, "ReadButton", 2048, NULL, 1, &TaskReadButtons);
-  xTaskCreate(readPotentiometerTask, "ReadPot", 2048, NULL, 1, &TaskReadAnalog);
-  // Đã loại bỏ: xTaskCreate(readDHTTask, "ReadDHT", 2048, NULL, 1, &TaskReadDHT);
-  xTaskCreate(controlLightsTask, "ControlLights", 2048, NULL, 1, &TaskControlLights);
+  // Tắt tất cả đèn ban đầu
+  digitalWrite(LED_DEN, LOW);
+  digitalWrite(LED_PHA, LOW);
+  digitalWrite(LED_XINHANTRAI, LOW);
+  digitalWrite(LED_XINHANPHAI, LOW);
+  digitalWrite(RELAY, LOW);
 
-  // Bật/tắt LED để kiểm tra xem ESP32 đã khởi động và tạo task thành công
-  digitalWrite(led_send, HIGH);
-  digitalWrite(led_receive, HIGH);
-  delay(1000);
-  digitalWrite(led_send, LOW);
-  digitalWrite(led_receive, LOW);
+  // Tạo mutex
+  xMutex = xSemaphoreCreateMutex();
+
+  // Tạo task START (luôn chạy để kiểm tra nút khởi động)
+  xTaskCreate(taskStart, "START_TASK", 2048, NULL, 2, &taskStartHandle);
+
+  Serial.println("System initialized. Press START button to start the car.");
 }
 
 void loop() {
-  // Hàm loop trống rỗng vì tất cả logic đã được chuyển vào các FreeRTOS tasks
-  // và chúng tự chạy độc lập.
-  vTaskDelay(pdMS_TO_TICKS(10));  // Chỉ để giữ cho loop() không hoàn toàn trống rỗng
+  // FreeRTOS sẽ quản lý tất cả, không cần code trong loop
+  vTaskDelay(portMAX_DELAY);
+}
+
+// ================== TASK FUNCTIONS ==================
+
+void taskStart(void *pvParameters) {
+  bool lastBtnState = HIGH;
+  bool currentBtnState;
+
+  while (1) {
+    currentBtnState = digitalRead(BTN_START);
+
+    // Phát hiện nhấn nút (falling edge)
+    if (lastBtnState == HIGH && currentBtnState == LOW) {
+      vTaskDelay(50 / portTICK_PERIOD_MS);  // Debounce
+
+      if (!carStarted) {
+        // Khởi động xe
+        carStarted = true;
+        digitalWrite(RELAY, HIGH);
+
+        // Khởi tạo sensors
+        dht.begin();
+        if (!rtc.begin()) {
+          Serial.println("Couldn't find RTC");
+        }
+        if (!rtc.isrunning()) {
+          Serial.println("RTC is NOT running, setting time!");
+          rtc.adjust(DateTime(F(__DATE__), F(__TIME__)));
+        }
+
+        // Tạo các tasks khác
+        xTaskCreate(taskDHT11, "DHT11_TASK", 2048, NULL, 1, &taskDHT11Handle);
+        xTaskCreate(taskSpeed, "SPEED_TASK", 2048, NULL, 1, &taskSpeedHandle);
+        xTaskCreate(taskDS1307, "DS1307_TASK", 2048, NULL, 1, &taskDS1307Handle);
+        xTaskCreate(taskDenThuong, "DEN_THUONG_TASK", 2048, NULL, 1, &taskDenThuongHandle);
+        xTaskCreate(taskDenPha, "DEN_PHA_TASK", 2048, NULL, 1, &taskDenPhaHandle);
+        xTaskCreate(taskXinhan, "XINHAN_TASK", 2048, NULL, 1, &taskXinhanHandle);
+        xTaskCreate(taskHazard, "HAZARD_TASK", 2048, NULL, 1, &taskHazardHandle);
+        xTaskCreate(taskReadCMD, "HAZARD_TASK", 2048, NULL, 1, &taskCMDHandle);
+
+
+        Serial.println("Car Started!");
+      } else {
+        // Tắt xe
+        carStarted = false;
+        digitalWrite(RELAY, LOW);
+
+        // Tắt tất cả đèn
+        digitalWrite(LED_DEN, LOW);
+        digitalWrite(LED_PHA, LOW);
+        digitalWrite(LED_XINHANTRAI, LOW);
+        digitalWrite(LED_XINHANPHAI, LOW);
+
+        // Reset trạng thái
+        denThuong = false;
+        denPha = false;
+        xinhanTrai = false;
+        xinhanPhai = false;
+        hazardMode = false;
+
+        // Xóa các tasks
+        if (taskDHT11Handle != NULL) vTaskDelete(taskDHT11Handle);
+        if (taskSpeedHandle != NULL) vTaskDelete(taskSpeedHandle);
+        if (taskDS1307Handle != NULL) vTaskDelete(taskDS1307Handle);
+        if (taskDenThuongHandle != NULL) vTaskDelete(taskDenThuongHandle);
+        if (taskDenPhaHandle != NULL) vTaskDelete(taskDenPhaHandle);
+        if (taskXinhanHandle != NULL) vTaskDelete(taskXinhanHandle);
+        if (taskHazardHandle != NULL) vTaskDelete(taskHazardHandle);
+
+        Serial.println("Car Stopped!");
+      }
+    }
+
+    lastBtnState = currentBtnState;
+    vTaskDelay(10 / portTICK_PERIOD_MS);
+  }
+}
+
+void taskDHT11(void *pvParameters) {
+  while (1) {
+    if (carStarted) {
+      if (xSemaphoreTake(xMutex, portMAX_DELAY)) {
+        temperature = dht.readTemperature();
+        //humidity = dht.readHumidity();
+
+        if (!isnan(temperature)) {
+          Serial.printf("Temperature:%.1f°C", temperature);
+        }
+        xSemaphoreGive(xMutex);
+      }
+    }
+    vTaskDelay(2000 / portTICK_PERIOD_MS);
+  }
+}
+
+void taskSpeed(void *pvParameters) {
+  while (1) {
+    if (carStarted) {
+      int adcValue = analogRead(BIENTRO);
+      speed = map(adcValue, 0, 4095, 0, 200);  // Chuyển đổi sang km/h (0-200)
+
+      if (xSemaphoreTake(xMutex, portMAX_DELAY)) {
+        Serial.printf("POT_VAL:%d\n", adcValue);
+        xSemaphoreGive(xMutex);
+      }
+    }
+    vTaskDelay(500 / portTICK_PERIOD_MS);
+  }
+}
+
+void taskDS1307(void *pvParameters) {
+  while (1) {
+    if (carStarted) {
+      if (xSemaphoreTake(xMutex, portMAX_DELAY)) {
+        currentTime = rtc.now() + TimeSpan(0, 6, 30, 20);
+        // Serial.printf("Date/Time: %02d/%02d/%04d %02d:%02d:%02d\n",
+        //               currentTime.day(), currentTime.month(), currentTime.year(),
+        //               currentTime.hour(), currentTime.minute(), currentTime.second());
+        Serial.printf("DATE/TIME:%02d-%02d-%04d %02d:%02d:%02d\n",
+                        currentTime.day(), currentTime.month(), currentTime.year(),
+                        currentTime.hour(), currentTime.minute(), currentTime.second());
+        xSemaphoreGive(xMutex);
+      }
+    }
+    vTaskDelay(1000 / portTICK_PERIOD_MS);
+  }
+}
+
+void taskDenThuong(void *pvParameters) {
+  bool lastBtnState = HIGH;
+  bool currentBtnState;
+
+  while (1) {
+    if (carStarted) {
+      currentBtnState = digitalRead(BTN_DEN);
+
+      if (lastBtnState == HIGH && currentBtnState == LOW) {
+        vTaskDelay(50 / portTICK_PERIOD_MS);  // Debounce
+
+        denThuong = !denThuong;
+        digitalWrite(LED_DEN, denThuong ? HIGH : LOW);
+
+        // Nếu tắt đèn thường thì tắt luôn đèn pha
+        if (!denThuong && denPha) {
+          denPha = false;
+          digitalWrite(LED_PHA, LOW);
+        }
+
+        Serial.printf("DEN_COS:%s\n", denThuong ? "ON" : "OFF");
+      }
+
+      lastBtnState = currentBtnState;
+    }
+    vTaskDelay(10 / portTICK_PERIOD_MS);
+  }
+}
+
+void taskDenPha(void *pvParameters) {
+  bool lastBtnState = HIGH;
+  bool currentBtnState;
+
+  while (1) {
+    if (carStarted) {
+      currentBtnState = digitalRead(BTN_PHA);
+
+      if (lastBtnState == HIGH && currentBtnState == LOW) {
+        vTaskDelay(50 / portTICK_PERIOD_MS);  // Debounce
+
+        // Chỉ bật đèn pha khi đèn thường đã bật
+        if (denThuong) {
+          denPha = !denPha;
+          digitalWrite(LED_PHA, denPha ? HIGH : LOW);
+          Serial.printf("DEN_PHA:%s\n", denPha ? "ON" : "OFF");
+        }
+      }
+
+      lastBtnState = currentBtnState;
+    }
+    vTaskDelay(10 / portTICK_PERIOD_MS);
+  }
+}
+
+void taskXinhan(void *pvParameters) {
+  bool lastBtnTrai = HIGH, lastBtnPhai = HIGH;
+  bool currentBtnTrai, currentBtnPhai;
+  unsigned long lastBlinkTime = 0;
+  bool blinkState = false;
+
+  while (1) {
+    if (carStarted && !hazardMode) {
+      currentBtnTrai = digitalRead(BTN_XINHANTRAI);
+      currentBtnPhai = digitalRead(BTN_XINHANPHAI);
+
+      // Xử lý nút xi nhan trái
+      if (lastBtnTrai == HIGH && currentBtnTrai == LOW) {
+        vTaskDelay(50 / portTICK_PERIOD_MS);
+        if (xinhanTrai) {
+          xinhanTrai = false;
+          Serial.println("TURN_LEFT:OFF");
+        } else {
+          xinhanTrai = true;
+          xinhanPhai = false;  // Tắt xi nhan phải
+          Serial.println("TURN_LEFT:ON");
+        }
+      }
+
+      // Xử lý nút xi nhan phải
+      if (lastBtnPhai == HIGH && currentBtnPhai == LOW) {
+        vTaskDelay(50 / portTICK_PERIOD_MS);
+        if (xinhanPhai) {
+          xinhanPhai = false;
+          Serial.println("TURN_RIGHT:OFF");
+        } else {
+          xinhanPhai = true;
+          xinhanTrai = false;  // Tắt xi nhan trái
+          Serial.println("TURN_RIGHT:ON");
+        }
+      }
+
+      // Xử lý nhấp nháy
+      if (millis() - lastBlinkTime >= 500) {
+        blinkState = !blinkState;
+        lastBlinkTime = millis();
+
+        if (xinhanTrai) {
+          digitalWrite(LED_XINHANTRAI, blinkState ? HIGH : LOW);
+          digitalWrite(LED_XINHANPHAI, LOW);
+        } else if (xinhanPhai) {
+          digitalWrite(LED_XINHANPHAI, blinkState ? HIGH : LOW);
+          digitalWrite(LED_XINHANTRAI, LOW);
+        } else {
+          digitalWrite(LED_XINHANTRAI, LOW);
+          digitalWrite(LED_XINHANPHAI, LOW);
+        }
+      }
+
+      lastBtnTrai = currentBtnTrai;
+      lastBtnPhai = currentBtnPhai;
+    } else if (!hazardMode) {
+      // Tắt xi nhan khi xe chưa khởi động
+      digitalWrite(LED_XINHANTRAI, LOW);
+      digitalWrite(LED_XINHANPHAI, LOW);
+    }
+
+    vTaskDelay(10 / portTICK_PERIOD_MS);
+  }
+}
+
+void taskHazard(void *pvParameters) {
+  bool lastBtnState = HIGH;
+  bool currentBtnState;
+  unsigned long lastBlinkTime = 0;
+  bool blinkState = false;
+
+  while (1) {
+    if (carStarted) {
+      currentBtnState = digitalRead(BTN_HAZARD);
+
+      if (lastBtnState == HIGH && currentBtnState == LOW) {
+        vTaskDelay(50 / portTICK_PERIOD_MS);  // Debounce
+
+        if (!hazardMode) {
+          // Lưu trạng thái xi nhan hiện tại
+          prevXinhanTrai = xinhanTrai;
+          prevXinhanPhai = xinhanPhai;
+
+          hazardMode = true;
+          xinhanTrai = false;
+          xinhanPhai = false;
+          Serial.println("HAZARD:ON");
+        } else {
+          hazardMode = false;
+
+          // Khôi phục trạng thái xi nhan trước đó
+          xinhanTrai = prevXinhanTrai;
+          xinhanPhai = prevXinhanPhai;
+          Serial.println("HAZARD:OFF");
+        }
+      }
+
+      // Xử lý nhấp nháy hazard
+      if (hazardMode) {
+        if (millis() - lastBlinkTime >= 500) {
+          blinkState = !blinkState;
+          lastBlinkTime = millis();
+
+          digitalWrite(LED_XINHANTRAI, blinkState ? HIGH : LOW);
+          digitalWrite(LED_XINHANPHAI, blinkState ? HIGH : LOW);
+        }
+      }
+
+      lastBtnState = currentBtnState;
+    }
+    vTaskDelay(10 / portTICK_PERIOD_MS);
+  }
+}
+
+void taskReadCMD(void *pvParameters) {
+  while (1) {
+    if (Serial.available()) {
+      String cmd = Serial.readStringUntil('\n');
+      cmd.trim();
+      cmd.toUpperCase();  // Chuyển về chữ hoa để dễ xử lý
+
+      Serial.println("Received command: " + cmd);
+
+      // Xử lý lệnh xi nhan trái
+      if (cmd == "TURN_LEFT:ON" || cmd == "LEFT:ON" || cmd == "TRAI:ON") {
+        if (carStarted && !hazardMode) {
+          xinhanTrai = true;
+          xinhanPhai = false;
+          Serial.println("✓ Xi nhan trái BẬT");
+        } else {
+          Serial.println("✗ Không thể bật xi nhan (xe chưa khởi động hoặc đang bật hazard)");
+        }
+      } else if (cmd == "TURN_LEFT:OFF" || cmd == "LEFT:OFF" || cmd == "TRAI:OFF") {
+        xinhanTrai = false;
+        Serial.println("✓ Xi nhan trái TẮT");
+      }
+
+      // Xử lý lệnh xi nhan phải
+      else if (cmd == "TURN_RIGHT:ON" || cmd == "RIGHT:ON" || cmd == "PHAI:ON") {
+        if (carStarted && !hazardMode) {
+          xinhanPhai = true;
+          xinhanTrai = false;
+          Serial.println("✓ Xi nhan phải BẬT");
+        } else {
+          Serial.println("✗ Không thể bật xi nhan (xe chưa khởi động hoặc đang bật hazard)");
+        }
+      } else if (cmd == "TURN_RIGHT:OFF" || cmd == "RIGHT:OFF" || cmd == "PHAI:OFF") {
+        xinhanPhai = false;
+        Serial.println("✓ Xi nhan phải TẮT");
+      }
+
+      // Xử lý lệnh hazard
+      else if (cmd == "HAZARD:ON" || cmd == "HAZARD") {
+        if (carStarted) {
+          // Lưu trạng thái xi nhan hiện tại
+          prevXinhanTrai = xinhanTrai;
+          prevXinhanPhai = xinhanPhai;
+          hazardMode = true;
+          xinhanTrai = false;
+          xinhanPhai = false;
+          Serial.println("✓ Chế độ Hazard BẬT");
+        } else {
+          Serial.println("✗ Xe chưa khởi động");
+        }
+      } else if (cmd == "HAZARD:OFF") {
+        hazardMode = false;
+        // Khôi phục trạng thái xi nhan trước đó
+        xinhanTrai = prevXinhanTrai;
+        xinhanPhai = prevXinhanPhai;
+        Serial.println("✓ Chế độ Hazard TẮT");
+      }
+
+      // Xử lý lệnh đèn thường
+      else if (cmd == "DEN_COS:ON" || cmd == "DEN:ON" || cmd == "COS:ON") {
+        if (carStarted) {
+          denThuong = true;
+          digitalWrite(LED_DEN, HIGH);
+          Serial.println("✓ Đèn thường BẬT");
+        } else {
+          Serial.println("✗ Xe chưa khởi động");
+        }
+      } else if (cmd == "DEN_COS:OFF" || cmd == "DEN:OFF" || cmd == "COS:OFF") {
+        denThuong = false;
+        digitalWrite(LED_DEN, LOW);
+        // Tắt luôn đèn pha nếu đang bật
+        if (denPha) {
+          denPha = false;
+          digitalWrite(LED_PHA, LOW);
+          Serial.println("✓ Đèn thường và đèn pha đã TẮT");
+        } else {
+          Serial.println("✓ Đèn thường TẮT");
+        }
+      }
+
+      // Xử lý lệnh đèn pha
+      else if (cmd == "DEN_PHA:ON" || cmd == "PHA:ON" || cmd == "HIGH_BEAM:ON") {
+        if (carStarted && denThuong) {
+          denPha = true;
+          digitalWrite(LED_PHA, HIGH);
+          Serial.println("✓ Đèn pha BẬT");
+        } else if (!carStarted) {
+          Serial.println("✗ Xe chưa khởi động");
+        } else {
+          Serial.println("✗ Phải bật đèn thường trước khi bật đèn pha");
+        }
+      } else if (cmd == "DEN_PHA:OFF" || cmd == "PHA:OFF" || cmd == "HIGH_BEAM:OFF") {
+        denPha = false;
+        digitalWrite(LED_PHA, LOW);
+        Serial.println("✓ Đèn pha TẮT");
+      }
+
+      // Lệnh trạng thái
+      else if (cmd == "STATUS" || cmd == "TRANGTHAI") {
+        Serial.println("========== TRẠNG THÁI HỆ THỐNG ==========");
+        Serial.println("Xe: " + String(carStarted ? "KHỞI ĐỘNG" : "TẮT"));
+        if (carStarted) {
+          Serial.println("Đèn thường: " + String(denThuong ? "BẬT" : "TẮT"));
+          Serial.println("Đèn pha: " + String(denPha ? "BẬT" : "TẮT"));
+          Serial.println("Xi nhan trái: " + String(xinhanTrai ? "BẬT" : "TẮT"));
+          Serial.println("Xi nhan phải: " + String(xinhanPhai ? "BẬT" : "TẮT"));
+          Serial.println("Hazard: " + String(hazardMode ? "BẬT" : "TẮT"));
+        }
+        Serial.println("========================================");
+      }
+
+      // Lệnh help
+      else if (cmd == "HELP" || cmd == "H" || cmd == "?") {
+        Serial.println("========== DANH SÁCH LỆNH ==========");
+        Serial.println("Xi nhan:");
+        Serial.println("  TRAI:ON / LEFT:ON - Bật xi nhan trái");
+        Serial.println("  TRAI:OFF / LEFT:OFF - Tắt xi nhan trái");
+        Serial.println("  PHAI:ON / RIGHT:ON - Bật xi nhan phải");
+        Serial.println("  PHAI:OFF / RIGHT:OFF - Tắt xi nhan phải");
+        Serial.println("");
+        Serial.println("Hazard:");
+        Serial.println("  HAZARD:ON / HAZARD - Bật hazard");
+        Serial.println("  HAZARD:OFF - Tắt hazard");
+        Serial.println("");
+        Serial.println("Đèn:");
+        Serial.println("  DEN:ON / LIGHT:ON - Bật đèn thường");
+        Serial.println("  DEN:OFF / LIGHT:OFF - Tắt đèn thường");
+        Serial.println("  PHA:ON / HIGH_BEAM:ON - Bật đèn pha");
+        Serial.println("  PHA:OFF / HIGH_BEAM:OFF - Tắt đèn pha");
+        Serial.println("");
+        Serial.println("Khác:");
+        Serial.println("  STATUS / TRANGTHAI - Xem trạng thái");
+        Serial.println("  HELP / H / ? - Hiện danh sách lệnh");
+        Serial.println("===================================");
+      }
+
+      // Lệnh không hợp lệ
+      else if (cmd.length() > 0) {
+        Serial.println("✗ Lệnh không hợp lệ: " + cmd);
+        Serial.println("Gõ 'HELP' để xem danh sách lệnh");
+      }
+    }
+
+    vTaskDelay(pdMS_TO_TICKS(100));  // Giảm delay để phản hồi nhanh hơn
+  }
 }
