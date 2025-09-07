@@ -209,9 +209,6 @@ void taskDS1307(void *pvParameters) {
     if (carStarted) {
       if (xSemaphoreTake(xMutex, portMAX_DELAY)) {
         currentTime = rtc.now() + TimeSpan(0, 6, 30, 20);
-        // Serial.printf("Date/Time: %02d/%02d/%04d %02d:%02d:%02d\n",
-        //               currentTime.day(), currentTime.month(), currentTime.year(),
-        //               currentTime.hour(), currentTime.minute(), currentTime.second());
         Serial.printf("DATE/TIME:%02d-%02d-%04d %02d:%02d:%02d\n",
                         currentTime.day(), currentTime.month(), currentTime.year(),
                         currentTime.hour(), currentTime.minute(), currentTime.second());
@@ -537,3 +534,4 @@ void taskReadCMD(void *pvParameters) {
     vTaskDelay(pdMS_TO_TICKS(100));  // Giảm delay để phản hồi nhanh hơn
   }
 }
+
