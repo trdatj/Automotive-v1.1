@@ -7,6 +7,7 @@ Window {
     width: 1920
     height: 980
     visible: true
+    //visibility: "FullScreen"
     title: qsTr("Instrument Cluster")
     property bool showMainContent: false
 
@@ -64,15 +65,6 @@ Window {
                 angle: 150
             }
 
-            //----car----
-            // Image {
-            //     id: r34
-            //     source: "qrc:/img/nissan_skyline_gtr.png"
-            //     width: 725
-            //     height: 339
-            //     anchors.horizontalCenter: parent.horizontalCenter
-            //     anchors.centerIn: parent
-            // }
             Image {
                 id: lane
                 source: "qrc:/icons/Road/road.png"
@@ -88,6 +80,91 @@ Window {
                     anchors.verticalCenter: parent.verticalCenter
                     anchors.right: parent.right
                     anchors.rightMargin: 250
+                }
+            }
+
+            //----xi nhan trái----
+            FuncIcon {
+                id: turnLeftID
+                width: 120
+                height: 85
+                checked: false
+                anchors.verticalCenter: background.verticalCenter
+                anchors.left: background.left
+                anchors.leftMargin: 40
+                iconImageOff: "qrc:/icons/icons-left/xi_nhan_trai.svg"
+                iconImageOn: "qrc:/icons/icons-left-checked/xi_nhan_trai_checked.svg"
+
+                MouseArea {
+                    anchors.fill: parent
+                    onClicked: {
+                        turnLeftID.checked = !turnLeftID.checked
+
+                        if (turnLeftID.checked) {
+                            turnLeftID.blinking = true
+                            turnLeftID.checked = true
+                            turnRightID.blinking = false
+                            turnRightID.checked = false
+                            console.log("Left turn signal ON")
+                            serialManager.sendData("TURN_LEFT:ON")
+                        } else {
+                            turnLeftID.blinking = false
+                            turnLeftID.checked = false
+                            console.log("Left turn signal: OFF")
+                            serialManager.sendData("TURN_LEFT:OFF")
+                        }
+                    }
+                }
+
+                Timer {
+                    id: blinkTimerLeft
+                    interval: turnLeftID.blinkInterval
+                    running: turnLeftID.blinking
+                    repeat: true
+                    onTriggered: turnLeftID.checked = !turnLeftID.checked
+                }
+            }
+
+            //----xi nhan phải----
+            FuncIcon {
+                id: turnRightID
+                width: 120
+                height: 85
+                anchors.right: background.right
+                anchors.verticalCenter: background.verticalCenter
+                anchors.rightMargin: 40
+                checked: false
+
+                iconImageOff: "qrc:/icons/icons-right/xi_nhan_phai.svg"
+                iconImageOn: "qrc:/icons/icons-right-checked/xi_nhan_phai_checked.svg"
+
+                MouseArea {
+                    anchors.fill: parent
+                    onClicked: {
+                        turnRightID.checked = !turnRightID.checked
+
+                        if (turnRightID.checked) {
+                            turnRightID.checked = true
+                            turnRightID.blinking = true
+                            turnLeftID.checked = false
+                            turnLeftID.blinking = false
+                            console.log("Right turn signal ON")
+                            serialManager.sendData("TURN_RIGHT:ON")
+                        } else {
+                            turnRightID.blinking = false
+                            turnRightID.checked = false
+                            console.log("Right turn signal OFF")
+                            serialManager.sendData("TURN_RIGHT:OFF")
+                        }
+                    }
+                }
+
+                Timer {
+                    id: blinkTimerRight
+                    interval: turnRightID.blinkInterval
+                    running: turnRightID.blinking
+                    repeat: true
+                    onTriggered: turnRightID.checked = !turnRightID.checked
                 }
             }
 
@@ -113,12 +190,12 @@ Window {
                 //Nhiệt độ xe
                 TempIcon {
                     id: cabinTempID
-                    width: 45
-                    height: 45
+                    width: 60
+                    height: 60
                     opacity: 0.9
                     anchors.verticalCenter: topbarID.verticalCenter
                     anchors.left: topbarID.left
-                    anchors.leftMargin: 100
+                    anchors.leftMargin: 90
 
                     status: "NORMAL"
                     normalSource: "qrc:/icons/icons-left/temp_cabin.svg"
@@ -135,11 +212,11 @@ Window {
                 //----nhiệt độ nước mát----
                 TempIcon {
                     id: oilTempID
-                    width: 45
-                    height: 45
+                    width: 60
+                    height: 60
                     opacity: 0.9
-                    anchors.right: topbarID.right
-                    anchors.rightMargin: 165
+                    anchors.left: topbarID.left
+                    anchors.leftMargin: 170
                     anchors.verticalCenter: topbarID.verticalCenter
 
                     normalSource: "qrc:/icons/icons-right/temp_oil.svg"
@@ -153,133 +230,15 @@ Window {
                     }
                 }
 
-                //----xi nhan trái----
-                FuncIcon {
-                    id: turnLeftID
-                    width: 100
-                    height: 65
-                    anchors.left: topbarID.left
-                    anchors.verticalCenter: topbarID.verticalCenter
-                    anchors.leftMargin: -70
-                    checked: false
-
-                    iconImageOff: "qrc:/icons/icons-left/xi_nhan_trai.svg"
-                    iconImageOn: "qrc:/icons/icons-left-checked/xi_nhan_trai_checked.svg"
-
-                    MouseArea {
-                        anchors.fill: parent
-                        onClicked: {
-                            turnLeftID.checked = !turnLeftID.checked
-
-                            if (turnLeftID.checked) {
-                                turnLeftID.blinking = true
-                                turnLeftID.checked = true
-                                turnRightID.blinking = false
-                                turnRightID.checked = false
-                                console.log("Left turn signal ON")
-                                serialManager.sendData("TURN_LEFT:ON")
-                            } else {
-                                turnLeftID.blinking = false
-                                turnLeftID.checked = false
-                                console.log("Left turn signal: OFF")
-                                serialManager.sendData("TURN_LEFT:OFF")
-                            }
-                        }
-                    }
-
-                    Timer {
-                        id: blinkTimerLeft
-                        interval: turnLeftID.blinkInterval
-                        running: turnLeftID.blinking
-                        repeat: true
-                        onTriggered: turnLeftID.checked = !turnLeftID.checked
-                    }
-                }
-
-                //----xi nhan phải----
-                FuncIcon {
-                    id: turnRightID
-                    width: 100
-                    height: 65
-                    anchors.right: topbarID.right
-                    anchors.verticalCenter: topbarID.verticalCenter
-                    anchors.rightMargin: -70
-                    checked: false
-
-                    iconImageOff: "qrc:/icons/icons-right/xi_nhan_phai.svg"
-                    iconImageOn: "qrc:/icons/icons-right-checked/xi_nhan_phai_checked.svg"
-
-                    MouseArea {
-                        anchors.fill: parent
-                        onClicked: {
-                            turnRightID.checked = !turnRightID.checked
-
-                            if (turnRightID.checked) {
-                                turnRightID.checked = true
-                                turnRightID.blinking = true
-                                turnLeftID.checked = false
-                                turnLeftID.blinking = false
-                                console.log("Right turn signal ON")
-                                serialManager.sendData("TURN_RIGHT:ON")
-                            } else {
-                                turnRightID.blinking = false
-                                turnRightID.checked = false
-                                console.log("Right turn signal OFF")
-                                serialManager.sendData("TURN_RIGHT:OFF")
-                            }
-                        }
-                    }
-
-                    Timer {
-                        id: blinkTimerRight
-                        interval: turnRightID.blinkInterval
-                        running: turnRightID.blinking
-                        repeat: true
-                        onTriggered: turnRightID.checked = !turnRightID.checked
-                    }
-                }
-            }
-
-            //----bottom bar----
-            Image {
-                id: bottomBarID
-                source: "qrc:/img/bottom.png"
-                width: 960
-                height: 110
-                anchors.bottom: parent.bottom
-                anchors.horizontalCenter: parent.horizontalCenter
-                anchors.bottomMargin: 80
-
-                //----Thời gian----
-                Text {
-                    id: realTimeID
-                    anchors.verticalCenter: bottomBarID.verticalCenter
-                    anchors.horizontalCenter: bottomBarID.horizontalCenter
-                    color: "white"
-                    font.pixelSize: 24
-                    text: Qt.formatDateTime(new Date(), "hh:mm:ss AP")
-                }
-
-                // Timer {
-                //     id: realTimeUpdateID
-                //     interval: 1000
-                //     running: true
-                //     repeat: true
-                //     onTriggered: {
-                //         realTimeID.text = Qt.formatDateTime(new Date(),
-                //                                             "hh:mm:ss AP")
-                //     }
-                // }
-
                 //----cos----
                 FuncIcon {
                     id: cosID
                     width: 60
                     height: 60
                     opacity: 0.9
-                    anchors.verticalCenter: bottomBarID.verticalCenter
-                    anchors.left: bottomBarID.left
-                    anchors.leftMargin: 100
+                    anchors.right: topbarID.right
+                    anchors.rightMargin: 100
+                    anchors.verticalCenter: topbarID.verticalCenter
                     checked: false
 
                     iconImageOn: "qrc:/icons/icons-left-checked/light_cos_checked.svg"
@@ -305,9 +264,9 @@ Window {
                     width: 60
                     height: 60
                     opacity: 0.9
-                    anchors.verticalCenter: bottomBarID.verticalCenter
-                    anchors.right: bottomBarID.right
-                    anchors.rightMargin: 100
+                    anchors.right: topbarID.right
+                    anchors.rightMargin: 180
+                    anchors.verticalCenter: topbarID.verticalCenter
                     checked: false
 
                     iconImageOn: "qrc:/icons/icons-left-checked/light-high-checked.svg"
@@ -326,98 +285,130 @@ Window {
                         }
                     }
                 }
-            }
 
-            //----Hazard----
-            FuncIcon {
-                id: hazardID
-                width: 60
-                height: 60
-                opacity: 0.9
-                checked: false
-                anchors.horizontalCenter: parent.horizontalCenter
-                anchors.top: topbarID.top
-                anchors.topMargin: 135
+                //----Hazard----
+                FuncIcon {
+                    id: hazardID
+                    width: 60
+                    height: 60
+                    opacity: 0.9
+                    checked: false
+                    anchors.right: topbarID.right
+                    anchors.rightMargin: 260
+                    anchors.verticalCenter: topbarID.verticalCenter
 
-                iconImageOn: "qrc:/icons/icons-left-checked/hazard_light_checked.png"
-                iconImageOff: "qrc:/icons/icons-left/hazard_light.svg"
+                    iconImageOn: "qrc:/icons/icons-left-checked/hazard_light_checked.png"
+                    iconImageOff: "qrc:/icons/icons-left/hazard_light.svg"
 
-                property bool wasLeftBlinkingBeforeHazard: false
-                property bool wasRightBlinkingBeforeHazard: false
+                    property bool wasLeftBlinkingBeforeHazard: false
+                    property bool wasRightBlinkingBeforeHazard: false
 
-                MouseArea {
-                    anchors.fill: parent
-                    onClicked: {
-                        hazardID.checked = !hazardID.checked
+                    MouseArea {
+                        anchors.fill: parent
+                        onClicked: {
+                            hazardID.checked = !hazardID.checked
 
-                        if (hazardID.checked) {
-                            console.log("Hazard on")
-                            hazardBlinkTimer.start()
+                            if (hazardID.checked) {
+                                console.log("Hazard on")
+                                hazardBlinkTimer.start()
 
-                            hazardID.wasLeftBlinkingBeforeHazard = turnLeftID.blinking
-                            hazardID.wasRightBlinkingBeforeHazard = turnRightID.blinking
+                                hazardID.wasLeftBlinkingBeforeHazard = turnLeftID.blinking
+                                hazardID.wasRightBlinkingBeforeHazard = turnRightID.blinking
 
-                            if (hazardID.wasLeftBlinkingBeforeHazard) {
-                                serialManager.sendData("TURN_LEFT:OFF")
-                                turnLeftID.blinking = false
-                                turnLeftID.checked = false
+                                if (hazardID.wasLeftBlinkingBeforeHazard) {
+                                    serialManager.sendData("TURN_LEFT:OFF")
+                                    turnLeftID.blinking = false
+                                    turnLeftID.checked = false
+                                    blinkTimerLeft.stop()
+                                }
+                                if (hazardID.wasRightBlinkingBeforeHazard) {
+                                    serialManager.sendData("TURN_RIGHT:OFF")
+                                    turnRightID.blinking = false
+                                    turnRightID.checked = false
+                                    blinkTimerRight.stop()
+                                }
+                                serialManager.sendData("HAZARD:ON")
+                            } else {
+                                hazardBlinkTimer.stop()
+                                hazardID.checked = false
                                 blinkTimerLeft.stop()
-                            }
-                            if (hazardID.wasRightBlinkingBeforeHazard) {
-                                serialManager.sendData("TURN_RIGHT:OFF")
+                                blinkTimerRight.stop()
                                 turnRightID.blinking = false
                                 turnRightID.checked = false
-                                blinkTimerRight.stop()
-                            }
-                            serialManager.sendData("HAZARD:ON")
-                        } else {
-                            hazardBlinkTimer.stop()
-                            hazardID.checked = false
-                            blinkTimerLeft.stop()
-                            blinkTimerRight.stop()
-                            turnRightID.blinking = false
-                            turnRightID.checked = false
-                            turnLeftID.blinking = false
-                            turnLeftID.checked = false
-                            console.log("Hazard off")
-                            serialManager.sendData("HAZARD:OFF")
-
-                            if (hazardID.wasLeftBlinkingBeforeHazard) {
-                                turnLeftID.blinking = true
-                                turnLeftID.checked = true
-                                blinkTimerLeft.start()
-                                serialManager.sendData("TURN_LEFT:ON")
-                            } else {
                                 turnLeftID.blinking = false
                                 turnLeftID.checked = false
-                                blinkTimerLeft.stop()
-                            }
+                                console.log("Hazard off")
+                                serialManager.sendData("HAZARD:OFF")
 
-                            if (hazardID.wasRightBlinkingBeforeHazard) {
-                                turnRightID.blinking = true
-                                turnRightID.checked = true
-                                blinkTimerRight.start()
-                                serialManager.sendData("TURN_RIGHT:ON")
-                            } else {
-                                turnRightID.blinking = false
-                                turnRightID.checked = false
-                                blinkTimerRight.stop()
-                            }
+                                if (hazardID.wasLeftBlinkingBeforeHazard) {
+                                    turnLeftID.blinking = true
+                                    turnLeftID.checked = true
+                                    blinkTimerLeft.start()
+                                    serialManager.sendData("TURN_LEFT:ON")
+                                } else {
+                                    turnLeftID.blinking = false
+                                    turnLeftID.checked = false
+                                    blinkTimerLeft.stop()
+                                }
 
-                            hazardID.wasLeftBlinkingBeforeHazard = false
-                            hazardID.wasRightBlinkingBeforeHazard = false
+                                if (hazardID.wasRightBlinkingBeforeHazard) {
+                                    turnRightID.blinking = true
+                                    turnRightID.checked = true
+                                    blinkTimerRight.start()
+                                    serialManager.sendData("TURN_RIGHT:ON")
+                                } else {
+                                    turnRightID.blinking = false
+                                    turnRightID.checked = false
+                                    blinkTimerRight.stop()
+                                }
+
+                                hazardID.wasLeftBlinkingBeforeHazard = false
+                                hazardID.wasRightBlinkingBeforeHazard = false
+                            }
+                        }
+                    }
+
+                    Timer {
+                        id: hazardBlinkTimer
+                        interval: 500
+                        running: false
+                        repeat: true
+                        onTriggered: {
+                            turnLeftID.checked = !turnLeftID.checked
+                            turnRightID.checked = !turnRightID.checked
                         }
                     }
                 }
+            }
+
+            //----bottom bar----
+            Image {
+                id: bottomBarID
+                source: "qrc:/img/bottom.png"
+                width: 960
+                height: 110
+                anchors.bottom: parent.bottom
+                anchors.horizontalCenter: parent.horizontalCenter
+                anchors.bottomMargin: 80
+
+                //----Thời gian----
+                Text {
+                    id: realTimeID
+                    anchors.verticalCenter: bottomBarID.verticalCenter
+                    anchors.horizontalCenter: bottomBarID.horizontalCenter
+                    color: "white"
+                    font.pixelSize: 24
+                    text: Qt.formatDateTime(new Date(), "hh:mm:ss AP")
+                }
 
                 Timer {
-                    id: hazardBlinkTimer
-                    interval: 500
-                    running: false
+                    id: realTimeUpdateID
+                    interval: 1000
+                    running: true
                     repeat: true
                     onTriggered: {
-                        turnLeftID.checked = !turnLeftID.checked
-                        turnRightID.checked = !turnRightID.checked
+                        realTimeID.text = Qt.formatDateTime(new Date(),
+                                                            "hh:mm:ss AP")
                     }
                 }
             }
@@ -431,7 +422,8 @@ Window {
                 opacity: 0.9
                 anchors.top: topbarID.top
                 anchors.topMargin: 135
-                anchors.left: hazardID.left
+                anchors.right: background.right
+                anchors.rightMargin: 590
                 anchors.leftMargin: 295
 
                 // property string currentSpeedLimit: "---"
@@ -494,6 +486,15 @@ Window {
             const status = parts[1]
 
             switch (device) {
+            case "Car":
+                if (status === "Started!") {
+                    root.showMainContent = true
+                    console.log("Xe đã khởi động, hiển thị giao diện chính.")
+                } else if (status === "Stopped!") {
+                    root.showMainContent = false
+                    console.log("Xe đã dừng, hiển thị lại giao diện khởi động.")
+                }
+                break
             case "TURN_LEFT":
                 if (status === "ON") {
                     console.log("Left turn signal on")
@@ -529,6 +530,24 @@ Window {
                     turnRightID.checked = false
                     turnLeftID.blinking = false
                     turnLeftID.checked = false
+                }
+                break
+            case "DEN_COS":
+                if (status === "ON") {
+                    console.log("Đèn COS bật")
+                    cosID.checked = true
+                } else {
+                    console.log("Đèn COS tắt")
+                    cosID.checked = false
+                }
+                break
+            case "DEN_PHA":
+                if (status === "ON") {
+                    console.log("Đèn pha bật")
+                    phaID.checked = true
+                } else {
+                    console.log("Đèn pha tắt")
+                    phaID.checked = false
                 }
                 break
             case "POT_VAL":
