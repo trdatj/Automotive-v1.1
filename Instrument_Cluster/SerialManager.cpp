@@ -5,7 +5,7 @@ SerialManager::SerialManager(QObject *parent) : QObject(parent), serial(new QSer
 
 void SerialManager::start()
 {
-    serial->setPortName("COM6");  // Cổng của ESP32 trên Ubuntu
+    serial->setPortName("COM8");  // Cổng của ESP32 trên Ubuntu
     serial->setBaudRate(QSerialPort::Baud115200);
     serial->setDataBits(QSerialPort::Data8);
     serial->setParity(QSerialPort::NoParity);

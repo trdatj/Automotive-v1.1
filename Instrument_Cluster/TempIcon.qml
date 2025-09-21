@@ -15,9 +15,8 @@ Item {
     property string warningSource: ""
     property string dangerousSource: ""
 
-    property real temperature: 0 // Thêm property nhiệt độ
-    property string temperatureUnit: "°C" // Đơn vị nhiệt độ
-
+    //property real temperature: 0 // Thêm property nhiệt độ
+    //property string temperatureUnit: "°C" // Đơn vị nhiệt độ
     Image {
         id: iconImage
         anchors.fill: parent
@@ -33,7 +32,7 @@ Item {
 
     Text {
         id: tempText
-        text: tempIcon.temperature.toFixed(1) + tempIcon.temperatureUnit
+        //text: tempIcon.temperature.toFixed(1) + tempIcon.temperatureUnit
         anchors {
             left: iconImage.right // Neo bên phải icon
             leftMargin: 15 // Khoảng cách với icon

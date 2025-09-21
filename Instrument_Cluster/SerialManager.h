@@ -23,7 +23,7 @@ private slots:
 private:
     QSerialPort *serial;
     QString buffer;
-    // QSerialPort *pythonSerial; // Xử lý kết nối Python
+    // QSerialPort *pythonSerial;
     // QString pythonBuffer;
 };
 

@@ -64,7 +64,7 @@ def create_model():
         input_shape=(IMG_SIZE[0], IMG_SIZE[1], 3),
         include_top=False,
         weights="imagenet",
-        alpha=0.5  # Nhẹ hơn bản gốc
+        alpha=0.5
     )
     
     # Freeze các layer đầu

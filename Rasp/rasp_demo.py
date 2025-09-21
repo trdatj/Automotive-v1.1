@@ -15,8 +15,8 @@ CLASS_NAMES = {
     2: "Tối đa 60",
 }
 
-HOST = '192.168.1.60'  # Địa chỉ IP máy Windows
-PORT = 65432           # Cổng kết nối
+HOST = '192.168.1.60'
+PORT = 65432          
 
 # ========== 2. Tham số lọc ==========
 CONFIDENCE_THRESHOLD = 0.85

@@ -135,7 +135,7 @@ void taskStart(void *pvParameters) {
         xTaskCreate(taskReadCMD, "HAZARD_TASK", 2048, NULL, 1, &taskCMDHandle);
 
 
-        Serial.println("Car Started!");
+        Serial.println("Car:Started!");
       } else {
         // Tắt xe
         carStarted = false;
@@ -163,7 +163,7 @@ void taskStart(void *pvParameters) {
         if (taskXinhanHandle != NULL) vTaskDelete(taskXinhanHandle);
         if (taskHazardHandle != NULL) vTaskDelete(taskHazardHandle);
 
-        Serial.println("Car Stopped!");
+        Serial.println("Car:Stopped!");
       }
     }
 
@@ -177,10 +177,9 @@ void taskDHT11(void *pvParameters) {
     if (carStarted) {
       if (xSemaphoreTake(xMutex, portMAX_DELAY)) {
         temperature = dht.readTemperature();
-        //humidity = dht.readHumidity();
 
         if (!isnan(temperature)) {
-          Serial.printf("Temperature:%.1f°C", temperature);
+          Serial.printf("Temperature:%.1f\n", temperature);
         }
         xSemaphoreGive(xMutex);
       }
@@ -193,7 +192,7 @@ void taskSpeed(void *pvParameters) {
   while (1) {
     if (carStarted) {
       int adcValue = analogRead(BIENTRO);
-      speed = map(adcValue, 0, 4095, 0, 200);  // Chuyển đổi sang km/h (0-200)
+      // speed = map(adcValue, 0, 4095, 0, 200);  // Chuyển đổi sang km/h (0-200)
 
       if (xSemaphoreTake(xMutex, portMAX_DELAY)) {
         Serial.printf("POT_VAL:%d\n", adcValue);
@@ -534,4 +533,3 @@ void taskReadCMD(void *pvParameters) {
     vTaskDelay(pdMS_TO_TICKS(100));  // Giảm delay để phản hồi nhanh hơn
   }
 }
-
